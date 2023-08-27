@@ -31,29 +31,48 @@ VAI_get_address() {
 }
 
 VAI_partition_disk() {
-    # Paritition Disk
-    sfdisk "${disk}" <<EOF
-,$bootpartitionsize
-,${swapsize}K
+    sfdisk -X gpt "${disk}" <<EOF
+,$bootpartitionsize,U 
 ;
 EOF
 }
 
+VAI_prepare_crypt_lvm() {
+    cryptsetup luksFormat --type=luks1 /dev/nvme0n1p2 #TODO avoid hardcoding partitions
+    cryptsetup open /dev/nvme0n1p2 crypt
+    # prepare LVM
+    vgcreate vg0 /dev/mapper/crypt
+    lvcreate --name swap -L $swapsize vg0
+    lvcreate --name void -l +100%FREE vg0
+}
+
 VAI_format_disk() {
     # Make Filesystems
-    mkfs.ext4 -F "${disk}1"
-    mkfs.ext4 -F "${disk}3"
+    mkfs.vfat -n BOOT -F 32 /dev/nvme0n1p1
+    mkfs.btrfs -L void /dev/mapper/vg0-void
     if [ "${swapsize}" -ne 0 ] ; then
-        mkswap -f "${disk}2"
+        mkswap /dev/mapper/vg0-swap
     fi
 }
 
 VAI_mount_target() {
     # Mount targetfs
-    mkdir -p "${target}"
-    mount "${disk}3" "${target}"
-    mkdir "${target}/boot"
-    mount "${disk}1" "${target}/boot"
+    mount -o rw,noatime,ssd,compress=lzo,space_cache,commit=60 /dev/mapper/vg0-void $target
+    btrfs subvolume create $target/@
+    btrfs subvolume create $target/@home
+    btrfs subvolume create $target/@snapshots
+    umount $target
+    mount -o rw,noatime,ssd,compress=lzo,space_cache,commit=60,subvol=@ /dev/mapper/vg0-void $target
+    mkdir $target/home
+    mkdir $target/.snapshots
+    mount -o rw,noatime,ssd,compress=lzo,space_cache,commit=60,subvol=@home /dev/mapper/vg0-void $target/home/
+    mount -o rw,noatime,ssd,compress=lzo,space_cache,commit=60,subvol=@snapshots /dev/mapper/vg0-void $target/.snapshots/
+    mkdir -p $target/boot/efi
+    mount -o rw,noatime /dev/nvme0n1p1 $target/boot/efi/
+    mkdir -p $target/var/cache
+    btrfs subvolume create $target/var/cache/xbps
+    btrfs subvolume create $target/var/tmp
+    btrfs subvolume create $target/srv
 }
 
 VAI_install_xbps_keys() {
@@ -63,7 +82,7 @@ VAI_install_xbps_keys() {
 
 VAI_install_base_system() {
     # Install a base system
-    XBPS_ARCH="${XBPS_ARCH}" xbps-install -Sy -R "${xbpsrepository}" -r /mnt base-system grub
+    XBPS_ARCH="${XBPS_ARCH}" xbps-install -Sy -R "${xbpsrepository}" -r /mnt base-system btrfs-progs cryptsetup grub-x86_64-efi lvm2
 
     # Install additional packages
     if [  -n "${pkgs}" ] ; then
@@ -189,6 +208,7 @@ VAI_end_action() {
 VAI_configure_autoinstall() {
     # -------------------------- Setup defaults ---------------------------
     bootpartitionsize="500M"
+    # select first disk if not mounted as /
     disk="$(lsblk -ipo NAME,TYPE,MOUNTPOINT | awk '{if ($2=="disk") {disks[$1]=0; last=$1} if ($3=="/") {disks[last]++}} END {for (a in disks) {if(disks[a] == 0){print a; break}}}')"
     hostname="$(ip -4 -o -r a | awk -F'[ ./]' '{x=$7} END {print x}')"
     # XXX: Set a manual swapsize here if the default doesn't fit your use case
