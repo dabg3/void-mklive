@@ -105,6 +105,7 @@ VAI_configure_sudo() {
 }
 
 VAI_correct_root_permissions() {
+    passwd root # prompt
     chroot "${target}" chown root:root /
     chroot "${target}" chmod 755 /
 }
@@ -115,14 +116,10 @@ VAI_configure_hostname() {
 }
 
 VAI_configure_rc_conf() {
-    # Set the value of various tokens
-    sed -i "s:Europe/Madrid:${timezone}:" "${target}/etc/rc.conf"
-    sed -i "s:\"es\":\"${keymap}\":" "${target}/etc/rc.conf"
-
-    # Activate various tokens
+    # Activate/Set various tokens
     sed -i "s:#HARDWARECLOCK:HARDWARECLOCK:" "${target}/etc/rc.conf"
-    sed -i "s:#TIMEZONE:TIMEZONE:" "${target}/etc/rc.conf"
-    sed -i "s:#KEYMAP:KEYMAP:" "${target}/etc/rc.conf"
+    sed "/^.*TIMEZONE.*/c TIMEZONE=${timezone}" "${target}/etc/rc.conf"
+    sed "/^.*KEYMAP.*/c KEYMAP=${keymap}" "${target}/etc/rc.conf"
 }
 
 VAI_add_user() {
@@ -136,31 +133,64 @@ fi
 }
 
 VAI_configure_grub() {
-    # Set hostonly
-    echo "hostonly=yes" > "${target}/etc/dracut.conf.d/hostonly.conf"
+    # Set hostonly TODO investigate effects
+    # echo "hostonly=yes" > "${target}/etc/dracut.conf.d/hostonly.conf"
+    cat <<EOF >> $target/etc/default/grub
+GRUB_ENABLE_CRYPTODISK=y
+EOF
 
+    sed -i "/GRUB_CMDLINE_LINUX_DEFAULT=/s/\"$/ rd.auto=1 cryptdevice=UUID=$LUKS_UUID:lvm:allow-discards&/" $target/etc/default/grub
     # Choose the newest kernel
     kernel_version="$(chroot "${target}" xbps-query linux | awk -F "[-_]" '/pkgver/ {print $2}')"
+    kernel_release="$(chroot $target uname -r)"
+
+    dd bs=512 count=4 if=/dev/urandom of=$target/boot/volume.key
+    cryptsetup luksAddKey /dev/nvme0n1p2 $target/boot/volume.key
+    chmod 000 $target/boot/volume.key
+    chmod -R g-rwx,o-rwx $target/boot
+
+    cat <<EOF >> $target/etc/crypttab
+crypt /dev/nvme0n1p2 /boot/volume.key luks
+EOF
+
+    cat <<EOF >> $target/etc/dracut.conf.d/10-crypt.conf
+install_items+=" /boot/volume.key /etc/crypttab "
+EOF
+
+    echo 'add_dracutmodules+=" crypt btrfs lvm resume "' >> $target/etc/dracut.conf
+    echo 'tmpdir=/tmp' >> $target/etc/dracut.conf
+
+    chroot "${target}" dracut --force --hostonly --kver "${kernel_release}"
 
     # Install grub
-    chroot "${target}" grub-install "${disk}"
+    mkdir $target/boot/grub
+    chroot "${target}" grub-mkconfig -o /boot/grub/grub.cfg
+    chroot "${target}" grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=void --boot-directory=/boot  --recheck
     chroot "${target}" xbps-reconfigure -f "linux${kernel_version}"
 
     # Correct the grub install
     chroot "${target}" update-grub
+    ln -s $target/etc/sv/dhcpcd $target/etc/runit/runsvdir/default
+    sed -i 's/issue_discards = 0/issue_discards = 1/' $target/etc/lvm/lvm.conf
 }
 
 VAI_configure_fstab() {
     # Grab UUIDs
-    uuid1="$(blkid -s UUID -o value "${disk}1")"
-    uuid2="$(blkid -s UUID -o value "${disk}2")"
-    uuid3="$(blkid -s UUID -o value "${disk}3")"
+    UEFI_UUID=$(blkid -s UUID -o value /dev/nvme0n1p1)
+    LUKS_UUID=$(blkid -s UUID -o value /dev/nvme0n1p2)
+    ROOT_UUID=$(blkid -s UUID -o value /dev/mapper/vg0-void)
+    SWAP_UUID=$(blkid -s UUID -o value /dev/mapper/vg0-swap)
 
     # Installl UUIDs into /etc/fstab
-    echo "UUID=$uuid3 / ext4 defaults,errors=remount-ro 0 1" >> "${target}/etc/fstab"
-    echo "UUID=$uuid1 /boot ext4 defaults 0 2" >> "${target}/etc/fstab"
+    cat <<EOF > $target/etc/fstab
+UUID=$ROOT_UUID / btrfs rw,noatime,ssd,compress=lzo,space_cache,commit=60,subvol=@ 0 1
+UUID=$ROOT_UUID /home btrfs rw,noatime,ssd,compress=lzo,space_cache,commit=60,subvol=@home 0 2
+UUID=$ROOT_UUID /.snapshots btrfs rw,noatime,ssd,compress=lzo,space_cache,commit=60,subvol=@snapshots 0 2
+UUID=$UEFI_UUID /boot/efi vfat defaults,noatime 0 2
+tmpfs /tmp tmpfs defaults,noatime,mode=1777 0 0
+EOF
     if [ "${swapsize}" -ne 0 ] ; then
-        echo "UUID=$uuid2 swap swap defaults 0 0" >> "${target}/etc/fstab"
+        echo "UUID=$SWAP_UUID none swap defaults 0 1" >> "${target}/etc/fstab" 
     fi
 }
 
@@ -176,6 +206,7 @@ VAI_configure_locale() {
             chroot "${target}" xbps-reconfigure -f glibc-locales
             ;;
     esac
+    echo "LANG=${libclocale}" > $target/etc/locale.conf
 }
 
 VAI_end_action() {
@@ -208,7 +239,7 @@ VAI_end_action() {
 VAI_configure_autoinstall() {
     # -------------------------- Setup defaults ---------------------------
     bootpartitionsize="500M"
-    # select first disk if not mounted as /
+    # select first non-root-mounted disk 
     disk="$(lsblk -ipo NAME,TYPE,MOUNTPOINT | awk '{if ($2=="disk") {disks[$1]=0; last=$1} if ($3=="/") {disks[last]++}} END {for (a in disks) {if(disks[a] == 0){print a; break}}}')"
     hostname="$(ip -4 -o -r a | awk -F'[ ./]' '{x=$7} END {print x}')"
     # XXX: Set a manual swapsize here if the default doesn't fit your use case
@@ -266,8 +297,9 @@ VAI_main() {
     VAI_print_step "Configuring installer"
     VAI_configure_autoinstall
 
-    VAI_print_step "Configuring disk using scheme 'Atomic'"
+    VAI_print_step "Configuring disk"
     VAI_partition_disk
+    VAI_prepare_crypt_lvm #TODO: conditionality 
     VAI_format_disk
 
     VAI_print_step "Mounting the target filesystems"
