@@ -35,20 +35,22 @@ VAI_partition_disk() {
 ,$bootpartitionsize,U 
 ;
 EOF
+    disk_part1=$(lsblk $disk -nlp --output NAME | sed -n "2p")
+    disk_part2=$(lsblk $disk -nlp --output NAME | sed -n "3p")
 }
 
 VAI_prepare_crypt_lvm() {
-    cryptsetup luksFormat --type=luks1 /dev/nvme0n1p2 #TODO avoid hardcoding partitions
-    cryptsetup open /dev/nvme0n1p2 crypt
-    # prepare LVM
-    vgcreate vg0 /dev/mapper/crypt
-    lvcreate --name swap -L $swapsize vg0
-    lvcreate --name void -l +100%FREE vg0
+    cryptsetup luksFormat --batch-mode --type=luks1 $disk_part2
+    cryptsetup open $disk_part2 crypt
+    lvm vgcreate vg0 /dev/mapper/crypt
+    lvm lvcreate --name swap -L ${swapsize}K vg0
+    lvm lvcreate --name void -l +100%FREE vg0
 }
 
+# TODO solve mkfs.vfat not found
 VAI_format_disk() {
     # Make Filesystems
-    mkfs.vfat -n BOOT -F 32 /dev/nvme0n1p1
+    mkfs.vfat -n BOOT -F 32 $disk_part1
     mkfs.btrfs -L void /dev/mapper/vg0-void
     if [ "${swapsize}" -ne 0 ] ; then
         mkswap /dev/mapper/vg0-swap
@@ -82,7 +84,9 @@ VAI_install_xbps_keys() {
 
 VAI_install_base_system() {
     # Install a base system
-    XBPS_ARCH="${XBPS_ARCH}" xbps-install -Sy -R "${xbpsrepository}" -r /mnt base-system btrfs-progs cryptsetup grub-x86_64-efi lvm2
+    # temporary restoring original
+    #XBPS_ARCH="${XBPS_ARCH}" xbps-install -Sy -R "${xbpsrepository}" -r /mnt base-system btrfs-progs cryptsetup grub-x86_64-efi lvm2 dosfstools
+    XBPS_ARCH="${XBPS_ARCH}" xbps-install -Sy -R "${xbpsrepository}" -r /mnt base-system grub-x86_64-efi
 
     # Install additional packages
     if [  -n "${pkgs}" ] ; then
