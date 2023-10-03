@@ -16,6 +16,7 @@ install() {
     inst /usr/bin/chroot
     inst /usr/bin/clear
     inst /usr/bin/cp
+    inst /usr/bin/passwd
     inst /usr/bin/chpasswd
     inst /usr/bin/dhclient
     inst /usr/bin/dhclient-script
@@ -23,7 +24,9 @@ install() {
     inst /usr/bin/install
     inst /usr/bin/lsblk
     inst /usr/bin/mkdir
-    inst /usr/bin/mkfs.ext4
+    inst /usr/bin/mkfs.fat
+    #installing mkfs.btrfs without having any related package. Host dependency(?)
+    inst /usr/bin/mkfs.btrfs
     inst /usr/bin/mkswap
     inst /usr/bin/mount
     inst /usr/bin/resolvconf
