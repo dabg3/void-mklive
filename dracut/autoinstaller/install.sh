@@ -47,10 +47,9 @@ VAI_prepare_crypt_lvm() {
     lvm lvcreate --name void -l +100%FREE vg0
 }
 
-# TODO solve mkfs.vfat not found
 VAI_format_disk() {
     # Make Filesystems
-    mkfs.vfat -n BOOT -F 32 $disk_part1
+    mkfs.fat -n BOOT -F 32 $disk_part1
     mkfs.btrfs -L void /dev/mapper/vg0-void
     if [ "${swapsize}" -ne 0 ] ; then
         mkswap /dev/mapper/vg0-swap
@@ -59,18 +58,19 @@ VAI_format_disk() {
 
 VAI_mount_target() {
     # Mount targetfs
-    mount -o rw,noatime,ssd,compress=lzo,space_cache,commit=60 /dev/mapper/vg0-void $target
+    mkdir $target
+    mount -o rw,noatime,ssd,compress=lzo,space_cache=v2,commit=60 /dev/mapper/vg0-void $target
     btrfs subvolume create $target/@
     btrfs subvolume create $target/@home
     btrfs subvolume create $target/@snapshots
     umount $target
-    mount -o rw,noatime,ssd,compress=lzo,space_cache,commit=60,subvol=@ /dev/mapper/vg0-void $target
+    mount -o rw,noatime,ssd,compress=lzo,space_cache=v2,commit=60,subvol=@ /dev/mapper/vg0-void $target
     mkdir $target/home
     mkdir $target/.snapshots
-    mount -o rw,noatime,ssd,compress=lzo,space_cache,commit=60,subvol=@home /dev/mapper/vg0-void $target/home/
-    mount -o rw,noatime,ssd,compress=lzo,space_cache,commit=60,subvol=@snapshots /dev/mapper/vg0-void $target/.snapshots/
+    mount -o rw,noatime,ssd,compress=lzo,space_cache=v2,commit=60,subvol=@home /dev/mapper/vg0-void $target/home/
+    mount -o rw,noatime,ssd,compress=lzo,space_cache=v2,commit=60,subvol=@snapshots /dev/mapper/vg0-void $target/.snapshots/
     mkdir -p $target/boot/efi
-    mount -o rw,noatime /dev/nvme0n1p1 $target/boot/efi/
+    mount -o rw,noatime $disk_part1 $target/boot/efi/
     mkdir -p $target/var/cache
     btrfs subvolume create $target/var/cache/xbps
     btrfs subvolume create $target/var/tmp
@@ -85,12 +85,12 @@ VAI_install_xbps_keys() {
 VAI_install_base_system() {
     # Install a base system
     # temporary restoring original
-    #XBPS_ARCH="${XBPS_ARCH}" xbps-install -Sy -R "${xbpsrepository}" -r /mnt base-system btrfs-progs cryptsetup grub-x86_64-efi lvm2 dosfstools
-    XBPS_ARCH="${XBPS_ARCH}" xbps-install -Sy -R "${xbpsrepository}" -r /mnt base-system grub-x86_64-efi
+    XBPS_ARCH="${XBPS_ARCH}" xbps-install -Sy -R "${xbpsrepository}" -r /mnt base-system btrfs-progs cryptsetup grub-x86_64-efi lvm2 dosfstools
 
     # Install additional packages
     if [  -n "${pkgs}" ] ; then
         # shellcheck disable=SC2086
+        # TODO
         XBPS_ARCH="${XBPS_ARCH}" xbps-install -Sy -R "${xbpsrepository}" -r /mnt ${pkgs}
     fi
 }
@@ -109,7 +109,7 @@ VAI_configure_sudo() {
 }
 
 VAI_correct_root_permissions() {
-    passwd root # prompt
+    chroot $target passwd root # prompt
     chroot "${target}" chown root:root /
     chroot "${target}" chmod 755 /
 }
@@ -149,12 +149,12 @@ EOF
     kernel_release="$(chroot $target uname -r)"
 
     dd bs=512 count=4 if=/dev/urandom of=$target/boot/volume.key
-    cryptsetup luksAddKey /dev/nvme0n1p2 $target/boot/volume.key
+    cryptsetup luksAddKey $disk_part2 $target/boot/volume.key
     chmod 000 $target/boot/volume.key
     chmod -R g-rwx,o-rwx $target/boot
 
     cat <<EOF >> $target/etc/crypttab
-crypt /dev/nvme0n1p2 /boot/volume.key luks
+crypt $disk_part2 /boot/volume.key luks
 EOF
 
     cat <<EOF >> $target/etc/dracut.conf.d/10-crypt.conf
@@ -180,16 +180,16 @@ EOF
 
 VAI_configure_fstab() {
     # Grab UUIDs
-    UEFI_UUID=$(blkid -s UUID -o value /dev/nvme0n1p1)
-    LUKS_UUID=$(blkid -s UUID -o value /dev/nvme0n1p2)
+    UEFI_UUID=$(blkid -s UUID -o value $disk_part1)
+    LUKS_UUID=$(blkid -s UUID -o value $disk_part2)
     ROOT_UUID=$(blkid -s UUID -o value /dev/mapper/vg0-void)
     SWAP_UUID=$(blkid -s UUID -o value /dev/mapper/vg0-swap)
 
     # Installl UUIDs into /etc/fstab
     cat <<EOF > $target/etc/fstab
-UUID=$ROOT_UUID / btrfs rw,noatime,ssd,compress=lzo,space_cache,commit=60,subvol=@ 0 1
-UUID=$ROOT_UUID /home btrfs rw,noatime,ssd,compress=lzo,space_cache,commit=60,subvol=@home 0 2
-UUID=$ROOT_UUID /.snapshots btrfs rw,noatime,ssd,compress=lzo,space_cache,commit=60,subvol=@snapshots 0 2
+UUID=$ROOT_UUID / btrfs rw,noatime,ssd,compress=lzo,space_cache=v2,commit=60,subvol=@ 0 1
+UUID=$ROOT_UUID /home btrfs rw,noatime,ssd,compress=lzo,space_cache=v2,commit=60,subvol=@home 0 2
+UUID=$ROOT_UUID /.snapshots btrfs rw,noatime,ssd,compress=lzo,space_cache=v2,commit=60,subvol=@snapshots 0 2
 UUID=$UEFI_UUID /boot/efi vfat defaults,noatime 0 2
 tmpfs /tmp tmpfs defaults,noatime,mode=1777 0 0
 EOF
