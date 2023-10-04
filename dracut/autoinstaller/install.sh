@@ -84,8 +84,7 @@ VAI_install_xbps_keys() {
 
 VAI_install_base_system() {
     # Install a base system
-    # temporary restoring original
-    XBPS_ARCH="${XBPS_ARCH}" xbps-install -Sy -R "${xbpsrepository}" -r /mnt base-system btrfs-progs cryptsetup grub-x86_64-efi lvm2 dosfstools
+    XBPS_ARCH="${XBPS_ARCH}" xbps-install -Sy -R "${xbpsrepository}" -r /mnt base-system cryptsetup grub-x86_64-efi lvm2 
 
     # Install additional packages
     if [  -n "${pkgs}" ] ; then
@@ -146,7 +145,8 @@ EOF
     sed -i "/GRUB_CMDLINE_LINUX_DEFAULT=/s/\"$/ rd.auto=1 cryptdevice=UUID=$LUKS_UUID:lvm:allow-discards&/" $target/etc/default/grub
     # Choose the newest kernel
     kernel_version="$(chroot "${target}" xbps-query linux | awk -F "[-_]" '/pkgver/ {print $2}')"
-    kernel_release="$(chroot $target uname -r)"
+    #kernel_release="$(chroot $target uname -r)" retrieve a different version
+    kernel_release="$(chroot $target ls /usr/lib/modules)"
 
     dd bs=512 count=4 if=/dev/urandom of=$target/boot/volume.key
     cryptsetup luksAddKey $disk_part2 $target/boot/volume.key
