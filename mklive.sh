@@ -110,12 +110,13 @@ copy_autoinstaller_files() {
 }
 
 install_prereqs() {
-    XBPS_ARCH=$ARCH "$XBPS_INSTALL_CMD" -r "$VOIDHOSTDIR" ${XBPS_REPOSITORY} \
+    XBPS_ARCH=$HOST_ARCH "$XBPS_INSTALL_CMD" -r "$VOIDHOSTDIR" ${XBPS_REPOSITORY} \
          -c "$XBPS_HOST_CACHEDIR" -y $REQUIRED_PKGS
     [ $? -ne 0 ] && die "Failed to install required software, exiting..."
 }
 
 install_packages() {
+    # dryrun
     XBPS_ARCH=$BASE_ARCH "${XBPS_INSTALL_CMD}" -r "$ROOTFS" \
         ${XBPS_REPOSITORY} -c "$XBPS_CACHEDIR" -yn $PACKAGE_LIST $INITRAMFS_PKGS
     [ $? -ne 0 ] && die "Missing required binary packages, exiting..."
@@ -197,7 +198,7 @@ generate_isolinux_boot() {
     sed -i  -e "s|@@SPLASHIMAGE@@|$(basename "${SPLASH_IMAGE}")|" \
         -e "s|@@KERNVER@@|${KERNELVERSION}|" \
         -e "s|@@KEYMAP@@|${KEYMAP}|" \
-        -e "s|@@ARCH@@|$BASE_ARCH|" \
+        -e "s|@@HOST_ARCH@@|$BASE_ARCH|" \
         -e "s|@@LOCALE@@|${LOCALE}|" \
         -e "s|@@BOOT_TITLE@@|${BOOT_TITLE}|" \
         -e "s|@@BOOT_CMDLINE@@|${BOOT_CMDLINE}|" \
@@ -213,7 +214,7 @@ generate_grub_efi_boot() {
     sed -i  -e "s|@@SPLASHIMAGE@@|$(basename "${SPLASH_IMAGE}")|" \
         -e "s|@@KERNVER@@|${KERNELVERSION}|" \
         -e "s|@@KEYMAP@@|${KEYMAP}|" \
-        -e "s|@@ARCH@@|$BASE_ARCH|" \
+        -e "s|@@HOST_ARCH@@|$BASE_ARCH|" \
         -e "s|@@BOOT_TITLE@@|${BOOT_TITLE}|" \
         -e "s|@@BOOT_CMDLINE@@|${BOOT_CMDLINE}|" \
         -e "s|@@LOCALE@@|${LOCALE}|" "$GRUB_DIR"/grub_void.cfg
@@ -330,12 +331,12 @@ XBPS_REPOSITORY="$XBPS_REPOSITORY --repository=https://repo-default.voidlinux.or
 # Configure dracut to use overlayfs for the writable overlay.
 BOOT_CMDLINE="$BOOT_CMDLINE rd.live.overlay.overlayfs=1 "
 
-ARCH=$(xbps-uhelper arch)
+HOST_ARCH=$(xbps-uhelper arch)
 
 # Set defaults
 : ${BASE_ARCH:=$(xbps-uhelper arch 2>/dev/null || uname -m)}
 : ${XBPS_CACHEDIR:="$(pwd -P)"/xbps-cachedir-${BASE_ARCH}}
-: ${XBPS_HOST_CACHEDIR:="$(pwd -P)"/xbps-cachedir-${ARCH}}
+: ${XBPS_HOST_CACHEDIR:="$(pwd -P)"/xbps-cachedir-${HOST_ARCH}}
 : ${KEYMAP:=us}
 : ${LOCALE:=en_US.UTF-8}
 : ${INITRAMFS_COMPRESSION:=xz}
@@ -388,7 +389,7 @@ print_step "Synchronizing XBPS repository data..."
 copy_void_keys "$ROOTFS"
 copy_void_keys "$VOIDHOSTDIR"
 XBPS_ARCH=$BASE_ARCH $XBPS_INSTALL_CMD -r "$ROOTFS" ${XBPS_REPOSITORY} -S
-XBPS_ARCH=$ARCH $XBPS_INSTALL_CMD -r "$VOIDHOSTDIR" ${XBPS_REPOSITORY} -S
+XBPS_ARCH=$HOST_ARCH $XBPS_INSTALL_CMD -r "$VOIDHOSTDIR" ${XBPS_REPOSITORY} -S
 
 # Get linux version for ISO
 # If linux version option specified use
