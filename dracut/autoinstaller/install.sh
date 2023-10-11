@@ -166,6 +166,9 @@ EOF
 
     chroot "${target}" dracut --force --hostonly --kver "${kernel_release}"
 
+    # fix "EFI variables are not supported on this system"
+    chroot "${target}" mount -t efivarfs none /sys/firmware/efi/efivars
+
     # Install grub
     mkdir $target/boot/grub
     chroot "${target}" grub-mkconfig -o /boot/grub/grub.cfg
