@@ -111,7 +111,7 @@ copy_dracut_files() {
 
 copy_autoinstaller_files() {
     mkdir -p "$1"/usr/lib/dracut/modules.d/01autoinstaller
-    cp dracut/autoinstaller/* "$1"/usr/lib/dracut/modules.d/01autoinstaller/
+    cp -r dracut/autoinstaller/* "$1"/usr/lib/dracut/modules.d/01autoinstaller/
 }
 
 install_prereqs() {

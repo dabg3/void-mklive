@@ -36,17 +36,12 @@ VAI_get_address() {
 }
 
 VAI_partition_disk() {
-    sfdisk -X gpt "${disk}" <<EOF
-,$bootpartitionsize,U 
-;
-EOF
-    disk_part1=$(lsblk $disk -nlp --output NAME | sed -n "2p")
-    disk_part2=$(lsblk $disk -nlp --output NAME | sed -n "3p")
+    . /usr/lib/dracut/modules.d/01autoinstaller/scripts/10-partition-disk.sh
 }
 
 VAI_prepare_crypt_lvm() {
-    cryptsetup luksFormat --batch-mode --type=luks1 $disk_part2
-    cryptsetup open $disk_part2 crypt
+    cryptsetup luksFormat --batch-mode --type=luks1 $diskpart2
+    cryptsetup open $diskpart2 crypt
     lvm vgcreate vg0 /dev/mapper/crypt
     lvm lvcreate --name swap -L ${swapsize}K vg0
     lvm lvcreate --name void -l +100%FREE vg0
@@ -54,7 +49,7 @@ VAI_prepare_crypt_lvm() {
 
 VAI_format_disk() {
     # Make Filesystems
-    mkfs.fat -n BOOT -F 32 $disk_part1
+    mkfs.fat -n BOOT -F 32 $diskpart1
     mkfs.btrfs -L void /dev/mapper/vg0-void
     if [ "${swapsize}" -ne 0 ] ; then
         mkswap /dev/mapper/vg0-swap
@@ -75,7 +70,7 @@ VAI_mount_target() {
     mount -o rw,noatime,ssd,compress=lzo,space_cache=v2,commit=60,subvol=@home /dev/mapper/vg0-void $target/home/
     mount -o rw,noatime,ssd,compress=lzo,space_cache=v2,commit=60,subvol=@snapshots /dev/mapper/vg0-void $target/.snapshots/
     mkdir -p $target/boot/efi
-    mount -o rw,noatime $disk_part1 $target/boot/efi/
+    mount -o rw,noatime $diskpart1 $target/boot/efi/
     mkdir -p $target/var/cache
     btrfs subvolume create $target/var/cache/xbps
     btrfs subvolume create $target/var/tmp
@@ -160,12 +155,12 @@ EOF
     kernel_version="$(chroot "${target}" xbps-query linux | awk -F "[-_]" '/pkgver/ {print $2}')"
 
     dd bs=512 count=4 if=/dev/urandom of=$target/boot/volume.key
-    cryptsetup luksAddKey $disk_part2 $target/boot/volume.key
+    cryptsetup luksAddKey $diskpart2 $target/boot/volume.key
     chmod 000 $target/boot/volume.key
     chmod -R g-rwx,o-rwx $target/boot
 
     cat <<EOF >> $target/etc/crypttab
-crypt $disk_part2 /boot/volume.key luks
+crypt $diskpart2 /boot/volume.key luks
 EOF
 
     cat <<EOF >> $target/etc/dracut.conf.d/10-crypt.conf
@@ -192,8 +187,8 @@ EOF
 
 VAI_configure_fstab() {
     # Grab UUIDs
-    UEFI_UUID=$(blkid -s UUID -o value $disk_part1)
-    LUKS_UUID=$(blkid -s UUID -o value $disk_part2)
+    UEFI_UUID=$(blkid -s UUID -o value $diskpart1)
+    LUKS_UUID=$(blkid -s UUID -o value $diskpart2)
     ROOT_UUID=$(blkid -s UUID -o value /dev/mapper/vg0-void)
     SWAP_UUID=$(blkid -s UUID -o value /dev/mapper/vg0-swap)
 

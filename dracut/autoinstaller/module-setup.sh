@@ -25,7 +25,6 @@ install() {
     inst /usr/bin/lsblk
     inst /usr/bin/mkdir
     inst /usr/bin/mkfs.fat
-    #installing mkfs.btrfs without having any related package. Host dependency(?)
     inst /usr/bin/mkfs.btrfs
     inst /usr/bin/efibootmgr
     inst /usr/bin/mkswap
@@ -45,4 +44,5 @@ install() {
 
     inst_hook pre-mount 01 "$moddir/install.sh"
     inst "$moddir/autoinstall.cfg" /etc/autoinstall.default
+    inst_multiple $moddir/scripts/* 
 }
