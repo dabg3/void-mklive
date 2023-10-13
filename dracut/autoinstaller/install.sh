@@ -1,5 +1,10 @@
 #!/bin/sh
 
+#
+# Credits for most of these instructions
+# https://gist.github.com/tobi-wan-kenobi/bff3af81eac27e210e1dc88ba660596e
+#
+
 type getargbool >/dev/null 2>&1 || . /lib/dracut-lib.sh
 
 # These functions pulled from void's excellent mklive.sh
