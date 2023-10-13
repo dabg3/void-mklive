@@ -136,8 +136,7 @@ fi
 }
 
 VAI_configure_grub() {
-    # Set hostonly TODO investigate effects
-    # echo "hostonly=yes" > "${target}/etc/dracut.conf.d/hostonly.conf"
+    echo "hostonly=yes" > "${target}/etc/dracut.conf.d/hostonly.conf"
     cat <<EOF >> $target/etc/default/grub
 GRUB_ENABLE_CRYPTODISK=y
 EOF
@@ -145,8 +144,6 @@ EOF
     sed -i "/GRUB_CMDLINE_LINUX_DEFAULT=/s/\"$/ rd.auto=1 cryptdevice=UUID=$LUKS_UUID:lvm:allow-discards&/" $target/etc/default/grub
     # Choose the newest kernel
     kernel_version="$(chroot "${target}" xbps-query linux | awk -F "[-_]" '/pkgver/ {print $2}')"
-    #kernel_release="$(chroot $target uname -r)" retrieve a different version
-    kernel_release="$(chroot $target ls /usr/lib/modules)"
 
     dd bs=512 count=4 if=/dev/urandom of=$target/boot/volume.key
     cryptsetup luksAddKey $disk_part2 $target/boot/volume.key
@@ -163,8 +160,6 @@ EOF
 
     echo 'add_dracutmodules+=" crypt btrfs lvm resume "' >> $target/etc/dracut.conf
     echo 'tmpdir=/tmp' >> $target/etc/dracut.conf
-
-    chroot "${target}" dracut --force --hostonly --kver "${kernel_release}"
 
     # fix "EFI variables are not supported on this system"
     chroot "${target}" mount -t efivarfs none /sys/firmware/efi/efivars
@@ -188,7 +183,7 @@ VAI_configure_fstab() {
     ROOT_UUID=$(blkid -s UUID -o value /dev/mapper/vg0-void)
     SWAP_UUID=$(blkid -s UUID -o value /dev/mapper/vg0-swap)
 
-    # Installl UUIDs into /etc/fstab
+    # Install UUIDs into /etc/fstab
     cat <<EOF > $target/etc/fstab
 UUID=$ROOT_UUID / btrfs rw,noatime,ssd,compress=lzo,space_cache=v2,commit=60,subvol=@ 0 1
 UUID=$ROOT_UUID /home btrfs rw,noatime,ssd,compress=lzo,space_cache=v2,commit=60,subvol=@home 0 2
