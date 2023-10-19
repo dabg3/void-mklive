@@ -84,13 +84,13 @@ VAI_install_xbps_keys() {
 
 VAI_install_base_system() {
     # Install a base system
-    XBPS_ARCH="${XBPS_ARCH}" xbps-install -Sy -R "${xbpsrepository}" -r /mnt base-system cryptsetup grub-x86_64-efi lvm2 
+    XBPS_ARCH="${XBPS_ARCH}" xbps-install -Sy ${xbpsrepository} -r /mnt base-system cryptsetup grub-x86_64-efi lvm2 
 
     # Install additional packages
     if [  -n "${pkgs}" ] ; then
         # shellcheck disable=SC2086
         # TODO
-        XBPS_ARCH="${XBPS_ARCH}" xbps-install -Sy -R "${xbpsrepository}" -r /mnt ${pkgs}
+        XBPS_ARCH="${XBPS_ARCH}" xbps-install -Sy ${xbpsrepository} -r /mnt ${pkgs}
     fi
 
     # network
@@ -266,10 +266,10 @@ VAI_configure_autoinstall() {
     XBPS_ARCH="$(xbps-uhelper arch)"
     case $XBPS_ARCH in
         *-musl)
-            xbpsrepository="https://repo-default.voidlinux.org/current/musl"
+            xbpsrepository="--repository=https://repo-default.voidlinux.org/current/musl"
             ;;
         *)
-            xbpsrepository="https://repo-default.voidlinux.org/current"
+            xbpsrepository="--repository=https://repo-default.voidlinux.org/current"
             ;;
     esac
 
