@@ -130,10 +130,13 @@ VAI_configure_hostname() {
 }
 
 VAI_configure_rc_conf() {
-    # Activate/Set various tokens
+    # Set the value of various tokens
+    sed -i "s:Europe/Madrid:${timezone}:" "${target}/etc/rc.conf"
+    sed -i "s:\"es\":\"${keymap}\":" "${target}/etc/rc.conf"
+    # Activate tokens
     sed -i "s:#HARDWARECLOCK:HARDWARECLOCK:" "${target}/etc/rc.conf"
-    sed "/^.*TIMEZONE.*/c TIMEZONE=${timezone}" "${target}/etc/rc.conf"
-    sed "/^.*KEYMAP.*/c KEYMAP=${keymap}" "${target}/etc/rc.conf"
+    sed -i "s:#TIMEZONE:TIMEZONE:" "${target}/etc/rc.conf"
+    sed -i "s:#KEYMAP:KEYMAP:" "${target}/etc/rc.conf"
 }
 
 VAI_add_user() {
