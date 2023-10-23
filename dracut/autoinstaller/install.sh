@@ -97,9 +97,15 @@ VAI_install_base_system() {
         # TODO
         XBPS_ARCH="${XBPS_ARCH}" xbps-install -Sy -R "${xbpsrepository}" -r /mnt ${pkgs}
     fi
+
+    # network
+    cp -L /etc/resolv.conf $target/etc/resolv.conf
 }
 
 VAI_prepare_chroot() {
+    mkdir "${target}/proc"
+    mkdir "${target}/sys"
+    mkdir "${target}/dev"
     # Mount dev, bind, proc, etc into chroot
     mount -t proc proc "${target}/proc"
     mount --rbind /sys "${target}/sys"
@@ -177,7 +183,7 @@ EOF
 
     # Correct the grub install
     chroot "${target}" update-grub
-    ln -s $target/etc/sv/dhcpcd $target/etc/runit/runsvdir/default
+    chroot $target ln -s /etc/sv/dhcpcd /etc/runit/runsvdir/default
     sed -i 's/issue_discards = 0/issue_discards = 1/' $target/etc/lvm/lvm.conf
 }
 
@@ -315,6 +321,9 @@ VAI_main() {
     VAI_print_step "Installing XBPS keys"
     VAI_install_xbps_keys
 
+    VAI_print_step "Preparing the chroot"
+    VAI_prepare_chroot
+
     VAI_print_step "Installing the base system"
     VAI_install_base_system
 
@@ -326,9 +335,6 @@ VAI_main() {
 
     VAI_print_step "Configure rc.conf"
     VAI_configure_rc_conf
-
-    VAI_print_step "Preparing the chroot"
-    VAI_prepare_chroot
 
     VAI_print_step "Fix ownership of /"
     VAI_correct_root_permissions
