@@ -30,7 +30,7 @@ umask 022
 
 readonly REQUIRED_PKGS="base-files libgcc dash coreutils sed tar gawk syslinux grub-i386-efi grub-x86_64-efi memtest86+ squashfs-tools xorriso"
 # latest 3 packages are related to FDE autoinstall
-readonly INITRAMFS_PKGS="binutils xz device-mapper dhclient dracut-network openresolv cryptsetup lvm2 efibootmgr" 
+readonly INITRAMFS_PKGS="binutils xz device-mapper dhclient dracut-network openresolv git cryptsetup lvm2 efibootmgr" 
 readonly PROGNAME=$(basename "$0")
 declare -a INCLUDE_DIRS=()
 

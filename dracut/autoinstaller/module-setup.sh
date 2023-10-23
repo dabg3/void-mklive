@@ -35,6 +35,12 @@ install() {
     inst /usr/bin/xbps-install
     inst /usr/bin/xbps-uhelper
     inst /usr/bin/xbps-query
+    # git stuff
+    inst_multiple /usr/bin/git
+    inst /usr/share/git-core/templates/description
+    inst /usr/share/git-core/templates/info/exclude
+    inst_multiple /usr/share/git-core/templates/hooks/*
+    inst_multiple /usr/libexec/git-core/*
 
     inst_multiple /var/db/xbps/keys/*
     inst_multiple /usr/share/xbps.d/*
