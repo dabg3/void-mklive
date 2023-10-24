@@ -345,11 +345,11 @@ VAI_main() {
     VAI_print_step "Adding default user"
     VAI_add_user
 
-    VAI_print_step "Configuring GRUB"
-    VAI_configure_grub
-
     VAI_print_step "Configuring /etc/fstab"
     VAI_configure_fstab
+
+    VAI_print_step "Configuring GRUB"
+    VAI_configure_grub
 
     VAI_print_step "Configuring libc-locales"
     VAI_configure_locale
