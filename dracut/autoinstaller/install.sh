@@ -84,7 +84,7 @@ VAI_install_xbps_keys() {
 
 VAI_install_base_system() {
     # Install a base system
-    XBPS_ARCH="${XBPS_ARCH}" xbps-install -Sy ${xbpsrepository} -r ${target} base-system cryptsetup grub-x86_64-efi lvm2
+    XBPS_ARCH="${XBPS_ARCH}" xbps-install -Sy ${xbpsrepository} -r ${target} base-system cryptsetup grub-x86_64-efi lvm2 zsh
 
     # Install additional packages
     if [  -n "${pkgs}" ] ; then
@@ -135,7 +135,7 @@ VAI_configure_rc_conf() {
 }
 
 VAI_add_user() {
-    chroot "${target}" useradd -m -s /bin/bash -U -G wheel,users,audio,video,cdrom,input "${username}"
+    chroot "${target}" useradd -m -s /bin/zsh -U -G wheel,users,audio,video,cdrom,input "${username}"
     if [ -z "${password}" ] ; then
         chroot "${target}" passwd "${username}"
     else
